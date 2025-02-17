@@ -1,0 +1,63 @@
+import AdminAccount from "@/database/adminaccount.model";
+import handleError from "@/lib/handlers/error";
+import { ForbiddenError } from "@/lib/http-errors";
+import dbConnect from "@/lib/mongoose";
+import { AdminAccountSchema } from "@/lib/validations";
+import { APIErrorResponse } from "@/types/global";
+import { NextResponse } from "next/server";
+
+/**
+ * Retrieves a list of accounts from the database.
+ *
+ * @returns {NextResponse} A Next.js response object containing a JSON object with a success flag and an array of account data.
+ * If an error occurs during the database operation, an error response is returned instead.
+ */
+export async function GET() {
+  try {
+    await dbConnect();
+    const accounts = await AdminAccount.find();
+    return NextResponse.json(
+      { success: true, data: accounts },
+      { status: 200 }
+    );
+  } catch (error) {
+    return handleError(error, "api") as APIErrorResponse;
+  }
+}
+
+/**
+ * Handles POST requests to create a new account in the database.
+ *
+ * @param {Request} request - The incoming request object containing the account data in JSON format.
+ * @returns {NextResponse} - A Next.js response object containing a JSON object with a success flag and the created account data.
+ * If an error occurs during the database operation, an error response is returned instead.
+ *
+ * @throws {ForbiddenError} - If an account with the same provider and providerId already exists.
+ */
+export async function POST(request: Request) {
+  try {
+    await dbConnect();
+    const body = await request.json();
+    const validatedData = AdminAccountSchema.parse(body);
+    const { provider, providerAccountId } = validatedData;
+
+    const existingAccount = await AdminAccount.findOne({
+      provider,
+      providerAccountId,
+    });
+
+    if (existingAccount) {
+      throw new ForbiddenError(
+        "An account with same provider and providerId already exists "
+      );
+    }
+
+    const newAccount = await AdminAccount.create(validatedData);
+    return NextResponse.json(
+      { success: true, data: newAccount },
+      { status: 201 }
+    );
+  } catch (error) {
+    return handleError(error, "api") as APIErrorResponse;
+  }
+}
